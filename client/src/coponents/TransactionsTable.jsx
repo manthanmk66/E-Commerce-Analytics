@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 
 const TransactionsTable = () => {
   const [month, setMonth] = useState(3); // Default to March (1-indexed month)
   const [transactions, setTransactions] = useState([]);
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(1);
   const [perPage] = useState(10);
 
@@ -14,10 +14,12 @@ const TransactionsTable = () => {
 
   const fetchTransactions = async () => {
     try {
-      const response = await axios.get(`/api/transactions/list?month=${month}&page=${page}&perPage=${perPage}&search=${searchText}`);
+      const response = await axios.get(
+        `/api/transactions/list?month=${month}&page=${page}&perPage=${perPage}&search=${searchText}`
+      );
       setTransactions(response.data.transactions);
     } catch (error) {
-      console.error('Error fetching transactions:', error);
+      console.error("Error fetching transactions:", error);
     }
   };
 
@@ -27,6 +29,10 @@ const TransactionsTable = () => {
 
   const handleMonthChange = (e) => {
     setMonth(e.target.value);
+  };
+
+  const handleFilterClick = () => {
+    fetchTransactions(); // Re-fetch transactions on filter button click
   };
 
   const handleNextPage = () => {
@@ -57,7 +63,13 @@ const TransactionsTable = () => {
         <option value="11">November</option>
         <option value="12">December</option>
       </select>
-      <input type="text" placeholder="Search Transactions" value={searchText} onChange={handleSearchChange} />
+      <input
+        type="text"
+        placeholder="Search Transactions"
+        value={searchText}
+        onChange={handleSearchChange}
+      />
+      <button onClick={handleFilterClick}>Apply Filter</button>
       <table>
         <thead>
           <tr>
@@ -68,7 +80,7 @@ const TransactionsTable = () => {
           </tr>
         </thead>
         <tbody>
-          {transactions.map(transaction => (
+          {transactions.map((transaction) => (
             <tr key={transaction._id}>
               <td>{transaction.title}</td>
               <td>{transaction.description}</td>
@@ -85,3 +97,4 @@ const TransactionsTable = () => {
 };
 
 export default TransactionsTable;
+  
