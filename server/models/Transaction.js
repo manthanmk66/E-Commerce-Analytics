@@ -1,13 +1,15 @@
-const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
+const mongoose = require("mongoose");
 
-const TransactionSchema = new Schema({
+const transactionSchema = new mongoose.Schema({
   title: String,
   description: String,
   price: Number,
   category: String,
+  sold: Boolean,
+  image: String,
   dateOfSale: Date,
-  sold: Boolean
 });
 
-module.exports = mongoose.model('Transaction', TransactionSchema);
+const Transaction = mongoose.model("Transaction", transactionSchema);
+
+module.exports = Transaction;

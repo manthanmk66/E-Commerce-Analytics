@@ -2,99 +2,138 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 const TransactionsTable = () => {
-  const [month, setMonth] = useState(3); // Default to March (1-indexed month)
   const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true); // Add loading state
+  const [error, setError] = useState(null); // Add error state
   const [searchText, setSearchText] = useState("");
-  const [page, setPage] = useState(1);
-  const [perPage] = useState(10);
+  const [selectedMonth, setSelectedMonth] = useState(3); // Default to March
+  const [page, setPage] = useState(1); // Page number state
+
+  const months = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
 
   useEffect(() => {
     fetchTransactions();
-  }, [month, searchText, page]); // Reload data when month, search text, or page changes
+  }, [selectedMonth, searchText, page]); // Fetch data when month, search text, or page changes
 
   const fetchTransactions = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const response = await axios.get(
-        `/api/transactions/list?month=${month}&page=${page}&perPage=${perPage}&search=${searchText}`
+        `http://localhost:5000/api/transactions/list?month=${selectedMonth}&page=${page}&perPage=10&search=${searchText}`
       );
       setTransactions(response.data.transactions);
     } catch (error) {
       console.error("Error fetching transactions:", error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleMonthChange = (e) => {
+    setSelectedMonth(e.target.value);
+    setPage(1); // Reset to first page on month change
   };
 
   const handleSearchChange = (e) => {
     setSearchText(e.target.value);
   };
 
-  const handleMonthChange = (e) => {
-    setMonth(e.target.value);
+  const handlePreviousClick = () => {
+    setPage((prevPage) => Math.max(prevPage - 1, 1));
   };
 
-  const handleFilterClick = () => {
-    fetchTransactions(); // Re-fetch transactions on filter button click
-  };
-
-  const handleNextPage = () => {
-    setPage(page + 1);
-  };
-
-  const handlePrevPage = () => {
-    if (page > 1) {
-      setPage(page - 1);
-    }
+  const handleNextClick = () => {
+    setPage((prevPage) => prevPage + 1);
   };
 
   return (
     <div>
       <h2>Transactions Table</h2>
-      <label htmlFor="monthSelect">Select Month:</label>
-      <select id="monthSelect" value={month} onChange={handleMonthChange}>
-        <option value="1">January</option>
-        <option value="2">February</option>
-        <option value="3">March</option>
-        <option value="4">April</option>
-        <option value="5">May</option>
-        <option value="6">June</option>
-        <option value="7">July</option>
-        <option value="8">August</option>
-        <option value="9">September</option>
-        <option value="10">October</option>
-        <option value="11">November</option>
-        <option value="12">December</option>
-      </select>
-      <input
-        type="text"
-        placeholder="Search Transactions"
-        value={searchText}
-        onChange={handleSearchChange}
-      />
-      <button onClick={handleFilterClick}>Apply Filter</button>
-      <table>
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Description</th>
-            <th>Price</th>
-            <th>Date of Sale</th>
-          </tr>
-        </thead>
-        <tbody>
-          {transactions.map((transaction) => (
-            <tr key={transaction._id}>
-              <td>{transaction.title}</td>
-              <td>{transaction.description}</td>
-              <td>{transaction.price}</td>
-              <td>{new Date(transaction.dateOfSale).toLocaleDateString()}</td>
+      <div>
+        <label>
+          Select Month:
+          <select value={selectedMonth} onChange={handleMonthChange}>
+            {months.map((month, index) => (
+              <option key={index} value={index + 1}>
+                {month}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div>
+        <input
+          type="text"
+          placeholder="Search Transactions"
+          value={searchText}
+          onChange={handleSearchChange}
+        />
+      </div>
+      {loading ? (
+        <p>Loading...</p> // Show loading indicator while fetching data
+      ) : error ? (
+        <p>Error: {error}</p> // Show error message if there is an error
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Description</th>
+              <th>Price</th>
+              <th>Category</th>
+              <th>Sold</th>
+              <th>Image</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <button onClick={handlePrevPage}>Previous</button>
-      <button onClick={handleNextPage}>Next</button>
+          </thead>
+          <tbody>
+            {transactions.map((transaction) => (
+              <tr key={transaction._id}>
+                <td>{transaction._id}</td>
+                <td>{transaction.title}</td>
+                <td>{transaction.description}</td>
+                <td>{transaction.price}</td>
+                <td>{transaction.category}</td>
+                <td>{transaction.sold ? "Yes" : "No"}</td>
+                <td>
+                  {transaction.image ? (
+                    <img
+                      src={transaction.image}
+                      alt={transaction.title}
+                      width="50"
+                    />
+                  ) : (
+                    "No Image"
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div>
+        <button onClick={handlePreviousClick} disabled={page === 1}>
+          Previous
+        </button>
+        <button onClick={handleNextClick}>Next</button>
+      </div>
     </div>
   );
 };
 
 export default TransactionsTable;
-  

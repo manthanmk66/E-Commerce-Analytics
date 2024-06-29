@@ -32,55 +32,51 @@ exports.initializeDatabase = async (req, res) => {
 };
 
 exports.getTransactions = async (req, res) => {
+  const { month, page, perPage, search } = req.query;
+
+  // Validate month parameter
+  const monthNumber = parseInt(month);
+  if (isNaN(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+    return res.status(400).json({ error: "Invalid month parameter" });
+  }
+
+  // Construct date range for the given month
+  const startDate = new Date(
+    Date.UTC(new Date().getFullYear(), monthNumber - 1, 1)
+  );
+  const endDate = new Date(Date.UTC(new Date().getFullYear(), monthNumber, 1));
+
+  console.log(`Start Date: ${startDate}, End Date: ${endDate}`);
+
+  // Construct the query
+  let query = {
+    dateOfSale: {
+      $gte: startDate,
+      $lt: endDate,
+    },
+  };
+
+  // Add search criteria if provided
+  if (search) {
+    query = {
+      ...query,
+      $or: [
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { price: { $regex: search, $options: "i" } },
+      ],
+    };
+  }
+
   try {
-    const { page = 1, perPage = 10, search = "", month } = req.query;
-
-    // Validate and parse month parameter
-    const monthNumber = parseInt(month);
-
-    // Validate if monthNumber is a valid number between 1 and 12
-    if (isNaN(monthNumber) || monthNumber < 1 || monthNumber > 12) {
-      throw new Error(
-        "Invalid month parameter. Please provide a valid month number (1-12)."
-      );
-    }
-
-    // Construct base query
-    const baseQuery = {
-      dateOfSale: {
-        $gte: new Date(`2021-${monthNumber}-01T00:00:00Z`), // Start of the selected month
-        $lt: new Date(`2021-${monthNumber + 1}-01T00:00:00Z`), // Start of the next month
-      },
-    };
-
-    // Handle text search query
-    let textQuery = {};
-    if (search) {
-      const regex = new RegExp(search, "i");
-      textQuery = {
-        $or: [{ title: { $regex: regex } }, { description: { $regex: regex } }],
-      };
-    }
-
-    // Merge baseQuery and textQuery
-    const finalQuery = {
-      ...baseQuery,
-      ...textQuery,
-    };
-
-    console.log("Final Query:", JSON.stringify(finalQuery));
-
-    // Perform MongoDB query
-    const transactions = await Transaction.find(finalQuery)
-      .skip((page - 1) * perPage)
+    const transactions = await Transaction.find(query)
+      .skip((parseInt(page) - 1) * parseInt(perPage))
       .limit(parseInt(perPage));
 
-    const count = await Transaction.countDocuments(finalQuery);
-
-    res.status(200).json({ transactions, count });
+    res.status(200).json({ transactions });
   } catch (error) {
-    console.error("Error fetching transactions:", error.message);
-    res.status(400).json({ error: error.message }); // Adjust status to 400 for client-side errors
+    console.error("Error fetching transactions:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
