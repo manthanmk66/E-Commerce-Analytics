@@ -1,211 +1,119 @@
-const axios = require("axios");
-const Transaction = require("../models/Transaction");
+const axios = require('axios');
+const Transaction = require('../models/Transaction');
 
-exports.initializeDatabase = async (req, res) => {
-  try {
-    console.log("Fetching data from third-party API...");
-    const response = await axios.get(
-      "https://s3.amazonaws.com/roxiler.com/product_transaction.json"
-    );
 
-    if (response.status !== 200) {
-      throw new Error("Failed to fetch data from third-party API");
+// Initialize database with seed data
+exports.initDatabase = async (req, res) => {
+    try {
+        const response = await axios.get('https://s3.amazonaws.com/roxiler.com/product_transaction.json');
+        const transactions = response.data;
+
+        // Clear existing data
+        await Transaction.deleteMany({});
+        // Insert new data
+        await Transaction.insertMany(transactions);
+
+        res.status(200).json({ message: 'Database initialized with seed data.' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error initializing database', error });
     }
-
-    const transactions = response.data;
-
-    console.log(`Fetched ${transactions.length} transactions.`);
-
-    console.log("Deleting existing transactions...");
-    await Transaction.deleteMany({});
-    console.log("Existing transactions deleted.");
-
-    console.log("Inserting new transactions...");
-    await Transaction.insertMany(transactions);
-    console.log("Transactions inserted successfully.");
-
-    res.status(200).json({ message: "Database initialized" });
-  } catch (error) {
-    console.error("Error initializing database:", error.message);
-    res.status(500).json({ error: error.message });
-  }
 };
 
-exports.getTransactions = async (req, res) => {
-  const { month, page, perPage, search } = req.query;
-
-  // Validate month parameter
-  const monthNumber = parseInt(month);
-  if (isNaN(monthNumber) || monthNumber < 1 || monthNumber > 12) {
-    return res.status(400).json({ error: "Invalid month parameter" });
-  }
-
-  // Construct date range for the given month
-  const startDate = new Date(
-    Date.UTC(new Date().getFullYear(), monthNumber - 1, 1)
-  );
-  const endDate = new Date(Date.UTC(new Date().getFullYear(), monthNumber, 1));
-
-  console.log(`Start Date: ${startDate}, End Date: ${endDate}`);
-
-  // Construct the query
-  let query = {
-    dateOfSale: {
-      $gte: startDate,
-      $lt: endDate,
-    },
-  };
-
-  // Add search criteria if provided
-  if (search) {
-    query = {
-      ...query,
-      $or: [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { price: { $regex: search, $options: "i" } },
-      ],
+// List all transactions with search and pagination
+exports.listTransactions = async (req, res) => {
+    const { page = 1, perPage = 10, search = '', month } = req.query;
+    const query = {
+        dateOfSale: { $regex: new RegExp(`-${month}-`, 'i') },
+        $or: [
+            { title: { $regex: search, $options: 'i' } },
+            { description: { $regex: search, $options: 'i' } },
+            { price: { $regex: search, $options: 'i' } }
+        ]
     };
-  }
 
-  try {
-    const transactions = await Transaction.find(query)
-      .skip((parseInt(page) - 1) * parseInt(perPage))
-      .limit(parseInt(perPage));
+    try {
+        const transactions = await Transaction.find(query)
+            .skip((page - 1) * perPage)
+            .limit(parseInt(perPage));
 
-    res.status(200).json({ transactions });
-  } catch (error) {
-    console.error("Error fetching transactions:", error);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
+        const total = await Transaction.countDocuments(query);
+
+        res.status(200).json({ transactions, total, page: parseInt(page), perPage: parseInt(perPage) });
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching transactions', error });
+    }
 };
 
+// Get statistics for a selected month
 exports.getStatistics = async (req, res) => {
-  try {
     const { month } = req.query;
-    const monthNumber = new Date(`${month} 1, 2000}`).getMonth() + 1;
+    const query = { dateOfSale: { $regex: new RegExp(`-${month}-`, 'i') } };
 
-    const query = {
-      $expr: {
-        $regexMatch: {
-          input: { $dateToString: { format: "%m", date: "$dateOfSale" } },
-          regex: `^${monthNumber < 10 ? "0" : ""}${monthNumber}$`,
-        },
-      },
-    };
+    try {
+        const totalSales = await Transaction.aggregate([
+            { $match: query },
+            { $group: { _id: null, total: { $sum: '$price' }, count: { $sum: 1 }, soldCount: { $sum: { $cond: ['$sold', 1, 0] } } } }
+        ]);
 
-    const totalSale = await Transaction.aggregate([
-      { $match: query },
-      { $group: { _id: null, totalSale: { $sum: "$price" } } },
-    ]);
+        const notSoldCount = totalSales[0].count - totalSales[0].soldCount;
 
-    const soldItems = await Transaction.countDocuments({
-      ...query,
-      sold: true,
-    });
-    const notSoldItems = await Transaction.countDocuments({
-      ...query,
-      sold: false,
-    });
-
-    res.status(200).json({
-      totalSale: totalSale[0] ? totalSale[0].totalSale : 0,
-      soldItems,
-      notSoldItems,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+        res.status(200).json({ totalSales: totalSales[0].total, soldCount: totalSales[0].soldCount, notSoldCount });
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching statistics', error });
+    }
 };
 
+// Get bar chart data for a selected month
 exports.getBarChart = async (req, res) => {
-  try {
     const { month } = req.query;
-    const monthNumber = new Date(`${month} 1, 2000}`).getMonth() + 1;
+    const query = { dateOfSale: { $regex: new RegExp(`-${month}-`, 'i') } };
 
-    const query = {
-      $expr: {
-        $regexMatch: {
-          input: { $dateToString: { format: "%m", date: "$dateOfSale" } },
-          regex: `^${monthNumber < 10 ? "0" : ""}${monthNumber}$`,
-        },
-      },
-    };
+    try {
+        const priceRanges = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900];
+        const barData = await Promise.all(priceRanges.map(async (range, index) => {
+            const nextRange = priceRanges[index + 1] || Infinity;
+            const count = await Transaction.countDocuments({ ...query, price: { $gte: range, $lt: nextRange } });
+            return { range: `${range}-${nextRange === Infinity ? 'above' : nextRange}`, count };
+        }));
 
-    const ranges = [
-      [0, 100],
-      [101, 200],
-      [201, 300],
-      [301, 400],
-      [401, 500],
-      [501, 600],
-      [601, 700],
-      [701, 800],
-      [801, 900],
-      [901, Infinity],
-    ];
-
-    const results = await Promise.all(
-      ranges.map((range) =>
-        Transaction.countDocuments({
-          ...query,
-          price: { $gte: range[0], $lt: range[1] },
-        })
-      )
-    );
-
-    const barChartData = ranges.map((range, index) => ({
-      range: `${range[0]}-${range[1] === Infinity ? "above" : range[1]}`,
-      count: results[index],
-    }));
-
-    res.status(200).json(barChartData);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+        res.status(200).json(barData);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching bar chart data', error });
+    }
 };
 
+// Get pie chart data for a selected month
 exports.getPieChart = async (req, res) => {
-  try {
     const { month } = req.query;
-    const monthNumber = new Date(`${month} 1, 2000}`).getMonth() + 1;
+    const query = { dateOfSale: { $regex: new RegExp(`-${month}-`, 'i') } };
 
-    const query = {
-      $expr: {
-        $regexMatch: {
-          input: { $dateToString: { format: "%m", date: "$dateOfSale" } },
-          regex: `^${monthNumber < 10 ? "0" : ""}${monthNumber}$`,
-        },
-      },
-    };
+    try {
+        const pieData = await Transaction.aggregate([
+            { $match: query },
+            { $group: { _id: '$category', count: { $sum: 1 } } }
+        ]);
 
-    const categories = await Transaction.aggregate([
-      { $match: query },
-      { $group: { _id: "$category", count: { $sum: 1 } } },
-    ]);
-
-    res.status(200).json(categories);
-  } catch (error) {
-    res.status500.json({ error: error.message });
-  }
+        res.status(200).json(pieData);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching pie chart data', error });
+    }
 };
 
+// Combine data from all APIs
 exports.getCombinedData = async (req, res) => {
-  try {
-    const transactions = await Transaction.find({});
-    const totalSale = await Transaction.aggregate([
-      { $group: { _id: null, totalSale: { $sum: "$price" } } },
-    ]);
-    const soldItems = await Transaction.countDocuments({ sold: true });
-    const notSoldItems = await Transaction.countDocuments({ sold: false });
+    try {
+        const transactions = await exports.listTransactions(req, res);
+        const statistics = await exports.getStatistics(req, res);
+        const barChart = await exports.getBarChart(req, res);
+        const pieChart = await exports.getPieChart(req, res);
 
-    res.status(200).json({
-      transactions,
-      totalSale: totalSale[0] ? totalSale[0].totalSale : 0,
-      soldItems,
-      notSoldItems,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+        res.status(200).json({
+            transactions: transactions.transactions,
+            statistics,
+            barChart,
+            pieChart
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching combined data', error });
+    }
 };
