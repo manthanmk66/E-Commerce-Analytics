@@ -1,119 +1,232 @@
-const axios = require('axios');
-const Transaction = require('../models/Transaction');
+const axios = require("axios");
+const Transaction = require("../models/Transaction");
 
+const getinitDatabase = async (req, res) => {
+  try {
+    const response = await axios.get(
+      "https://s3.amazonaws.com/roxiler.com/product_transaction.json"
+    );
+    const transactions = response.data;
 
-// Initialize database with seed data
-exports.initDatabase = async (req, res) => {
-    try {
-        const response = await axios.get('https://s3.amazonaws.com/roxiler.com/product_transaction.json');
-        const transactions = response.data;
+    // Clear existing data
+    await Transaction.deleteMany({});
+    // Insert new data
+    await Transaction.insertMany(transactions);
 
-        // Clear existing data
-        await Transaction.deleteMany({});
-        // Insert new data
-        await Transaction.insertMany(transactions);
-
-        res.status(200).json({ message: 'Database initialized with seed data.' });
-    } catch (error) {
-        res.status(500).json({ message: 'Error initializing database', error });
-    }
+    res.status(200).json({ message: "Database initialized with seed data." });
+  } catch (error) {
+    res.status(500).json({ message: "Error initializing database", error });
+  }
 };
 
-// List all transactions with search and pagination
-exports.listTransactions = async (req, res) => {
-    const { page = 1, perPage = 10, search = '', month } = req.query;
-    const query = {
-        dateOfSale: { $regex: new RegExp(`-${month}-`, 'i') },
-        $or: [
-            { title: { $regex: search, $options: 'i' } },
-            { description: { $regex: search, $options: 'i' } },
-            { price: { $regex: search, $options: 'i' } }
-        ]
+// Get transaction data by month
+const getList = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) - 1 || 0;
+    const limit = !isNaN(parseInt(req.query.limit))
+      ? parseInt(req.query.limit)
+      : 10;
+    const skip = page * limit;
+    const search = req.query.search || "";
+    const month = !isNaN(parseInt(req.query.month))
+      ? parseInt(req.query.month)
+      : 3;
+
+    const searchConfig = {
+      $and: [
+        month == 0
+          ? {}
+          : {
+              $expr: {
+                $eq: [{ $month: "$dateOfSale" }, month],
+              },
+            },
+        {
+          $or: [
+            { title: { $regex: search, $options: "i" } },
+            { description: { $regex: search, $options: "i" } },
+            { price: { $regex: search, $options: "i" } },
+          ],
+        },
+      ],
     };
 
-    try {
-        const transactions = await Transaction.find(query)
-            .skip((page - 1) * perPage)
-            .limit(parseInt(perPage));
+    const data = await Transaction.find(searchConfig).skip(skip).limit(limit);
+    const totalCount = await Transaction.countDocuments(searchConfig);
 
-        const total = await Transaction.countDocuments(query);
-
-        res.status(200).json({ transactions, total, page: parseInt(page), perPage: parseInt(perPage) });
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching transactions', error });
-    }
+    const responseData = {
+      success: true,
+      totalCount,
+      page: page + 1,
+      limit,
+      month,
+      transactions: data,
+    };
+    res.status(200).json(responseData);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
 };
 
-// Get statistics for a selected month
-exports.getStatistics = async (req, res) => {
-    const { month } = req.query;
-    const query = { dateOfSale: { $regex: new RegExp(`-${month}-`, 'i') } };
+// Get statistics for transactions by month
+const getStatistics = async (req, res) => {
+  try {
+    const month = !isNaN(parseInt(req.query.month))
+      ? parseInt(req.query.month)
+      : 3;
+    const monthQuery =
+      month == 0
+        ? {}
+        : {
+            $expr: {
+              $eq: [{ $month: "$dateOfSale" }, month],
+            },
+          };
+    const projectQuery = {
+      _id: 0,
+      price: 1,
+      sold: 1,
+      dateOfSale: 1,
+    };
 
-    try {
-        const totalSales = await Transaction.aggregate([
-            { $match: query },
-            { $group: { _id: null, total: { $sum: '$price' }, count: { $sum: 1 }, soldCount: { $sum: { $cond: ['$sold', 1, 0] } } } }
-        ]);
+    const data = await Transaction.find(monthQuery, projectQuery);
 
-        const notSoldCount = totalSales[0].count - totalSales[0].soldCount;
+    const response = data.reduce(
+      (acc, curr) => {
+        const currPrice = parseFloat(curr.price);
 
-        res.status(200).json({ totalSales: totalSales[0].total, soldCount: totalSales[0].soldCount, notSoldCount });
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching statistics', error });
-    }
+        acc.totalSale += curr.sold ? currPrice : 0;
+        acc.soldCount += curr.sold ? 1 : 0;
+        acc.unsoldCount += curr.sold ? 0 : 1;
+
+        return acc;
+      },
+      { totalCount: data.length, totalSale: 0, soldCount: 0, unsoldCount: 0 }
+    );
+    response.totalSale = response.totalSale.toFixed(2);
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
 };
 
-// Get bar chart data for a selected month
-exports.getBarChart = async (req, res) => {
-    const { month } = req.query;
-    const query = { dateOfSale: { $regex: new RegExp(`-${month}-`, 'i') } };
+// Get data for bar chart by month
+const getBarChart = async (req, res) => {
+  try {
+    const month = !isNaN(parseInt(req.query.month))
+      ? parseInt(req.query.month)
+      : 3;
+    const monthQuery =
+      month == 0
+        ? {}
+        : {
+            $expr: {
+              $eq: [{ $month: "$dateOfSale" }, month],
+            },
+          };
+    const projectQuery = {
+      _id: 0,
+      price: 1,
+    };
+    const data = await Transaction.find(monthQuery, projectQuery);
 
-    try {
-        const priceRanges = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900];
-        const barData = await Promise.all(priceRanges.map(async (range, index) => {
-            const nextRange = priceRanges[index + 1] || Infinity;
-            const count = await Transaction.countDocuments({ ...query, price: { $gte: range, $lt: nextRange } });
-            return { range: `${range}-${nextRange === Infinity ? 'above' : nextRange}`, count };
-        }));
+    let accumulator = {};
 
-        res.status(200).json(barData);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching bar chart data', error });
+    for (let i = 1; i <= 10; i++) {
+      let range = i * 100;
+
+      if (i == 10) range = "901-above";
+      else if (i == 1) range = "0-100";
+      else range = `${range - 100 + 1}-${range}`;
+
+      accumulator[range] = 0;
     }
+
+    const response = data.reduce((acc, curr) => {
+      const currPrice = parseFloat(curr.price);
+
+      let priceRange = Math.ceil(currPrice / 100) * 100;
+
+      if (priceRange == 100) priceRange = "0-100";
+      else if (priceRange > 900) priceRange = "901-above";
+      else priceRange = `${priceRange - 100 + 1}-${priceRange}`;
+
+      acc[priceRange]++;
+
+      return acc;
+    }, accumulator);
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
 };
 
-// Get pie chart data for a selected month
-exports.getPieChart = async (req, res) => {
-    const { month } = req.query;
-    const query = { dateOfSale: { $regex: new RegExp(`-${month}-`, 'i') } };
+// Get data for pie chart by month
+const getPieChart = async (req, res) => {
+  try {
+    const month = !isNaN(parseInt(req.query.month))
+      ? parseInt(req.query.month)
+      : 3;
+    const monthQuery =
+      month == 0
+        ? {}
+        : {
+            $expr: {
+              $eq: [{ $month: "$dateOfSale" }, month],
+            },
+          };
+    const projectQuery = {
+      _id: 0,
+      category: 1,
+    };
+    const data = await Transaction.find(monthQuery, projectQuery);
 
-    try {
-        const pieData = await Transaction.aggregate([
-            { $match: query },
-            { $group: { _id: '$category', count: { $sum: 1 } } }
-        ]);
+    const response = data.reduce((acc, curr) => {
+      acc[curr.category] ? acc[curr.category]++ : (acc[curr.category] = 1);
 
-        res.status(200).json(pieData);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching pie chart data', error });
-    }
+      return acc;
+    }, {});
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
 };
 
-// Combine data from all APIs
-exports.getCombinedData = async (req, res) => {
-    try {
-        const transactions = await exports.listTransactions(req, res);
-        const statistics = await exports.getStatistics(req, res);
-        const barChart = await exports.getBarChart(req, res);
-        const pieChart = await exports.getPieChart(req, res);
+// Get combined data from statistics, bar chart, and pie chart APIs
+const getCombinedData = async (req, res) => {
+  try {
+    const baseURL = req.protocol + "://" + req.get("host");
+    const [stats, barChart, pieChart] = await Promise.all([
+      axios.get(`${baseURL}/statistics?month=${req.query.month}`),
+      axios.get(`${baseURL}/bar-chart?month=${req.query.month}`),
+      axios.get(`${baseURL}/pie-chart?month=${req.query.month}`),
+    ]);
 
-        res.status(200).json({
-            transactions: transactions.transactions,
-            statistics,
-            barChart,
-            pieChart
-        });
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching combined data', error });
-    }
+    const response = {
+      statsData: stats.data,
+      barChartData: barChart.data,
+      pieChartData: pieChart.data,
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = {
+  getList,
+  getStatistics,
+  getBarChart,
+  getPieChart,
+  getCombinedData,
+  getinitDatabase,
 };

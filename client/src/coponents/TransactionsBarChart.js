@@ -1,73 +1,96 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import { Bar } from "react-chartjs-2";
-import Chart from "chart.js/auto";
+import axios from "axios";
+import { Chart as ChartJS } from "chart.js/auto";
 
-const TransactionsBarChart = ({ month }) => {
+const BarChart = ({ selectedMonth }) => {
   const [barChartData, setBarChartData] = useState([]);
-  const [loading, setLoading] = useState(true); // Add loading state
-  const [error, setError] = useState(null); // Add error state
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchBarChartData();
-  }, [month]);
+    const fetchBarChartData = async () => {
+      setLoading(true);
+      setError(null); // Clear previous errors
+      try {
+        const response = await axios.get(
+          `http://localhost:5000/api/transactions/bar-chart?month=${selectedMonth}`
+        );
+        setBarChartData(response.data);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching bar chart data:", error);
+        setError("Error fetching data. Please try again later.");
+        setLoading(false);
+      }
+    };
 
-  const fetchBarChartData = async () => {
-    try {
-      const response = await axios.get(
-        `/api/transactions/bar-chart?month=${month}`
-      );
-      setBarChartData(response.data);
-      setLoading(false); // Set loading to false after data fetch
-      setError(null); // Clear error state on successful fetch
-    } catch (error) {
-      console.error("Error fetching bar chart data:", error);
-      setLoading(false); // Set loading to false on error
-      setError("Error fetching data. Please try again."); // Set error message
-    }
+    fetchBarChartData();
+  }, [selectedMonth]);
+
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: "top",
+      },
+    },
+    scales: {
+      x: {
+        stacked: true,
+        title: {
+          display: true,
+          text: "Price Range",
+        },
+      },
+      y: {
+        stacked: true,
+        title: {
+          display: true,
+          text: "Product Count",
+        },
+        ticks: {
+          stepSize: 4,
+        },
+      },
+    },
+    aspectRatio: 1.6,
+    plugins: {
+      title: {
+        display: true,
+        text: "Number of Products per Price Range",
+      },
+    },
   };
 
-  // Format data for Chart.js
+  const labels = Object.keys(barChartData);
+  const values = Object.values(barChartData);
+
   const chartData = {
-    labels: barChartData.map((item) => item.range),
+    labels,
     datasets: [
       {
-        label: "Number of Items",
-        backgroundColor: "rgba(75,192,192,1)",
-        borderColor: "rgba(0,0,0,1)",
-        borderWidth: 1,
-        data: barChartData.map((item) => item.count),
+        label: "Number of products per price range",
+        data: values,
+        backgroundColor: ["rgba(0, 105, 100, 0.7)"],
       },
     ],
   };
 
   return (
-    <div className="chart-container">
-      <h2>Transactions Bar Chart</h2>
+    <div>
       {loading ? (
-        <p>Loading...</p> // Show loading indicator while fetching data
+        <div>Loading...</div>
       ) : error ? (
-        <p>{error}</p> // Show error message if fetch failed
-      ) : barChartData.length > 0 ? (
-        <Bar
-          data={chartData}
-          options={{
-            scales: {
-              yAxes: [
-                {
-                  ticks: {
-                    beginAtZero: true,
-                  },
-                },
-              ],
-            },
-          }}
-        />
+        <div>{error}</div>
       ) : (
-        <p>No data available</p>
+        <div>
+          <h2>Bar Chart for Month {selectedMonth}</h2>
+          <Bar data={chartData} options={options} />
+        </div>
       )}
     </div>
   );
 };
 
-export default TransactionsBarChart;
+export default BarChart;
