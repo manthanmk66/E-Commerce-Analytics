@@ -6,18 +6,35 @@ import {
   InputLabel,
   MenuItem,
 } from "@mui/material";
-import TransactionsTable from "./coponents/TransactionsTable";
-import TransactionsChart from "./coponents/TransactionsBarChart";
+import TransactionsTable from "./coponents/dashboard/TransactionsTable";
+import StatisticsComponent from "./coponents/dashboard/Statistics";
+import TransactionsBarChart from "./coponents/dashboard/TransactionsBarChart";
 
 const App = () => {
-  const [selectedMonth, setSelectedMonth] = useState(5); // Default month is March (index 3 in the options array)
+  const [selectedMonth, setSelectedMonth] = useState(5); // Default month is May (index 5)
 
   const handleMonthChange = (event) => {
     setSelectedMonth(parseInt(event.target.value));
   };
 
+  const monthText = [
+    "All Months",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ][selectedMonth];
+
   return (
-    <Container maxWidth="xl" className="p-4">
+    <Container maxWidth="xl" className="p-4 ">
       <div className="mb-4 z-20">
         <FormControl fullWidth>
           <InputLabel id="monthSelectLabel">Select Month</InputLabel>
@@ -46,7 +63,10 @@ const App = () => {
         </FormControl>
       </div>
       <TransactionsTable month={selectedMonth} />
-      <TransactionsChart selectedMonth={selectedMonth} />
+      <div className="flex flex-col md:flex-row">
+        <TransactionsBarChart selectedMonth={selectedMonth} />
+        <StatisticsComponent selectedMonth={selectedMonth} />
+      </div>
     </Container>
   );
 };

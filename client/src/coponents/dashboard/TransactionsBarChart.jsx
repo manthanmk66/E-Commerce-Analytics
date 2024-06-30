@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Bar } from "react-chartjs-2";
 import axios from "axios";
 import { Chart as ChartJS } from "chart.js/auto";
+import { Typography, CircularProgress } from "@material-ui/core";
 
 const BarChart = ({ selectedMonth }) => {
   const [barChartData, setBarChartData] = useState([]);
@@ -54,7 +55,7 @@ const BarChart = ({ selectedMonth }) => {
         },
       },
     },
-    aspectRatio: 1.6,
+    aspectRatio: 0.8,
     plugins: {
       title: {
         display: true,
@@ -84,8 +85,10 @@ const BarChart = ({ selectedMonth }) => {
       ) : error ? (
         <div>{error}</div>
       ) : (
-        <div>
-          <h2>Bar Chart for Month {selectedMonth}</h2>
+        <div className="mt-16">
+          <Typography variant="h3" className="mb-4 text-center">
+            Bar Chart for Month {selectedMonth}
+          </Typography>
           <Bar data={chartData} options={options} />
         </div>
       )}
