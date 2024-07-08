@@ -13,7 +13,7 @@ const StatisticsComponent = ({ selectedMonth }) => {
     const fetchStatistics = async () => {
       try {
         const statsResponse = await axios.get(
-          `${process.env.REACT_APP_BASE_URL}/api/transactions/bar-chart?month=${selectedMonth}`
+          `${process.env.REACT_APP_BASE_URL}/api/transactions/statistics?month=${selectedMonth}`
         );
         setStatistics(statsResponse.data);
 
