@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Bar } from "react-chartjs-2";
 import axios from "axios";
-import { Chart as ChartJS } from "chart.js/auto";
-import { Typography, CircularProgress } from "@material-ui/core";
+import { Typography, CircularProgress, Box } from "@mui/material";
 
 const BarChart = ({ selectedMonth }) => {
   const [barChartData, setBarChartData] = useState([]);
@@ -12,10 +11,10 @@ const BarChart = ({ selectedMonth }) => {
   useEffect(() => {
     const fetchBarChartData = async () => {
       setLoading(true);
-      setError(null); // Clear previous errors
+      setError(null); 
       try {
         const response = await axios.get(
-          `http://localhost:5000/api/transactions/bar-chart?month=${selectedMonth}`
+          `${process.env.REACT_APP_BASE_URL}/api/transactions/bar-chart?month=${selectedMonth}`
         );
         setBarChartData(response.data);
         setLoading(false);
@@ -34,6 +33,10 @@ const BarChart = ({ selectedMonth }) => {
     plugins: {
       legend: {
         position: "top",
+      },
+      title: {
+        display: true,
+        text: "Number of Products per Price Range",
       },
     },
     scales: {
@@ -56,12 +59,6 @@ const BarChart = ({ selectedMonth }) => {
       },
     },
     aspectRatio: 0.8,
-    plugins: {
-      title: {
-        display: true,
-        text: "Number of Products per Price Range",
-      },
-    },
   };
 
   const labels = Object.keys(barChartData);
@@ -79,20 +76,20 @@ const BarChart = ({ selectedMonth }) => {
   };
 
   return (
-    <div>
+    <Box>
       {loading ? (
-        <div>Loading...</div>
+        <CircularProgress />
       ) : error ? (
-        <div>{error}</div>
+        <Typography color="error">{error}</Typography>
       ) : (
-        <div className="mt-16">
+        <Box className="mt-16">
           <Typography variant="h3" className="mb-4 text-center">
             Bar Chart for Month {selectedMonth}
           </Typography>
           <Bar data={chartData} options={options} />
-        </div>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 };
 

@@ -16,11 +16,12 @@ const TransactionsTable = ({ month }) => {
 
   const fetchTransactions = async () => {
     setLoading(true);
+    
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/transactions/list",
+        `${process.env.REACT_APP_BASE_URL}/api/transactions/list`,
         {
-          params: { month, search, page: page + 1, limit: 10 }, // Adjusting page number for API pagination (1-based)
+          params: { month, search, page: page + 1, limit: 10 }, 
         }
       );
       setTransactions(response.data.transactions);

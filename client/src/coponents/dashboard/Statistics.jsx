@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Typography, CircularProgress } from "@material-ui/core";
+import { Typography, CircularProgress, Box } from "@mui/material";
 import { Doughnut } from "react-chartjs-2";
 
 const StatisticsComponent = ({ selectedMonth }) => {
@@ -13,12 +13,12 @@ const StatisticsComponent = ({ selectedMonth }) => {
     const fetchStatistics = async () => {
       try {
         const statsResponse = await axios.get(
-          `http://localhost:5000/api/transactions/statistics?month=${selectedMonth}`
+          `${process.env.REACT_APP_BASE_URL}/api/transactions/bar-chart?month=${selectedMonth}`
         );
         setStatistics(statsResponse.data);
 
         const pieResponse = await axios.get(
-          `http://localhost:5000/api/transactions/pie-chart?month=${selectedMonth}`
+          `${process.env.REACT_APP_BASE_URL}/api/transactions/pie-chart?month=${selectedMonth}`
         );
         const pieData = pieResponse.data;
         const chartData = {
@@ -68,13 +68,13 @@ const StatisticsComponent = ({ selectedMonth }) => {
   }
 
   return (
-    <div className="flex flex-col md:flex-row items-center justify-center ml-40 gap-1">
-      <div className="md:w-1/2">
+    <Box className="flex flex-col md:flex-row items-center justify-center ml-40 gap-1">
+      <Box className="md:w-1/2">
         <Typography variant="h3" className="mb-4 text-center">
           Statistics for month {selectedMonth}
         </Typography>
-        <div className="flex flex-col items-center">
-          <div className="border rounded-md p-4 mb-4">
+        <Box className="flex flex-col items-center">
+          <Box className="border rounded-md p-4 mb-4">
             <Typography className="mb-2">
               <span className="font-bold">Total Count:</span>{" "}
               {statistics.totalCount}
@@ -91,18 +91,18 @@ const StatisticsComponent = ({ selectedMonth }) => {
               <span className="font-bold">Unsold Count:</span>{" "}
               {statistics.unsoldCount}
             </Typography>
-          </div>
-        </div>
-      </div>
+          </Box>
+        </Box>
+      </Box>
       {pieChartData && (
-        <div className="md:w-1/2">
+        <Box className="md:w-1/2">
           <Typography variant="h4" className="mb-2 text-center">
             Category Distribution
           </Typography>
           <Doughnut data={pieChartData} />
-        </div>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 };
 
